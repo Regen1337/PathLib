@@ -4,6 +4,10 @@
 
 The Lua Pathing Library is a flexible tool for traversing and manipulating nested Lua tables. It provides a simple and intuitive API for accessing, modifying, and analyzing complex data structures using string-based paths.
 
+## Tested Languages
+
+- Lua 5.1
+
 ## Features
 
 - Easy access to nested table values using dot notation and array indices
