@@ -28,6 +28,8 @@ To use the Lua Pathing Library, simply include the `PathLib.lua` file in your Lu
 local PathLib = require("PathLib")
 ```
 
+Otherwise you can take the core file and do as you wish.
+
 ## Usage
 
 ### Basic Operations
