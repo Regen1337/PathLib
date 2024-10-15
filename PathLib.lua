@@ -71,14 +71,21 @@ local assertTableEquals = PathLib.assertTableEquals
 
 local deepCopyCache = PathLib.deepCopyCache
 function PathLib.deepCopy(t)
-    if not isTable(t) then return t end
+    if type(t) ~= "table" then return t end
     if deepCopyCache[t] then return deepCopyCache[t] end
 
     local copy = {}
     deepCopyCache[t] = copy
 
     for k, v in pairs(t) do
-        copy[deepCopy(k)] = deepCopy(v)
+        if type(v) == "table" then
+            copy[deepCopy(k)] = deepCopy(v)
+        elseif type(v) == "function" or type(v) == "userdata" or type(v) == "thread" then
+            -- For functions, userdata, and threads, we maintain the reference(?)
+            copy[deepCopy(k)] = v
+        else
+            copy[deepCopy(k)] = v
+        end
     end
 
     return setmetatable(copy, getmetatable(t))
