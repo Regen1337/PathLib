@@ -79,12 +79,12 @@ function PathLib.deepCopy(t)
 
     for k, v in pairs(t) do
         if type(v) == "table" then
-            copy[deepCopy(k)] = deepCopy(v)
+            copy[PathLib.deepCopy(k)] = PathLib.deepCopy(v)
         elseif type(v) == "function" or type(v) == "userdata" or type(v) == "thread" then
             -- For functions, userdata, and threads, we maintain the reference(?)
-            copy[deepCopy(k)] = v
+            copy[PathLib.deepCopy(k)] = v
         else
-            copy[deepCopy(k)] = v
+            copy[PathLib.deepCopy(k)] = v
         end
     end
 
