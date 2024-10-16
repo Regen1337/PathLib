@@ -509,14 +509,14 @@ local function filter(tbl, pathOrPredicate, predicateOrNil)
     
     if type(values) == "table" then
         for k, v in pairs(values) do
-            if predicate(v, k) then
+            if predicate(v, k, path) then
                 table.insert(filtered, v)
             end
         end
         if path then
             setPath(tbl, filtered, path)
         end
-    elseif predicate(values, path) then
+    elseif predicate(values, _, path) then
         filtered = {values}
         -- Don't modify the original for single values
     end

@@ -86,13 +86,13 @@ local results = PathLib.get(table, "*.users.*.name")
 local analysis = PathLib.analyzePath(table, "path.to.analyze")
 
 -- Map operation
-PathLib.map(table, "path.to.array", function(v) return v * 2 end)
+PathLib.map(table, "path.to.array", function(v, path) return v * 2 end)
 
--- Filter operation
-local filtered = PathLib.filter(table, "path.to.array", function(v) return v % 2 == 0 end)
+-- Filter operation (path is a optional second arg, key may be nil in some cases in the callback, and path can be string/table in some cases)
+local filtered = PathLib.filter(table, "path.to.array", function(v, k, path) return v % 2 == 0 end)
 
 -- Reduce operation
-local sum = PathLib.reduce(table, "path.to.array", function(acc, v) return acc + v end, 0)
+local sum = PathLib.reduce(table, "path.to.array", function(acc, v, keyOrIndex, path) return acc + v end, 0)
 ```
 
 ## Examples
