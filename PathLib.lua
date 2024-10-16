@@ -318,6 +318,7 @@ local function get(tbl, path)
 
     return current
 end
+PathLib.get = get
 
 local function set(tbl, path, value)
     if isString(path) then
@@ -326,6 +327,7 @@ local function set(tbl, path, value)
 
     setRecursive(tbl, 1, path, value)
 end
+PathLib.set = set
 
 local function delete(tbl, path)
     if isString(path) then
@@ -353,6 +355,7 @@ local function delete(tbl, path)
         end
     end
 end
+PathLib.delete = delete
 
 -- Advanced features
 
@@ -362,6 +365,7 @@ local function find(tbl, predicate)
     findTraverse(tbl, "", predicate, results)
     return results
 end
+PathLib.find = find
 
 local function flatten(tbl)
     local result = {}
@@ -388,6 +392,7 @@ local function unflatten(tbl)
 
     return result
 end
+PathLib.unflatten = unflatten
 
 -- Metatable and circular reference handling
 
@@ -396,6 +401,7 @@ local function isCircular(tbl)
     seenTables = {}
     return checkCircular(tbl)
 end
+PathLib.isCircular = isCircular
 
 -- Analysis functions
 
@@ -432,6 +438,7 @@ local function analyzePath(tbl, path)
 
     return result
 end
+PathLib.analyzePath = analyzePath
 
 -- Public API
 
@@ -448,16 +455,19 @@ local function path(tbl, ...)
     addToCache(path, result)
     return result
 end
+PathLib.path = path
 
 local function pathTo(tbl, ...)
     return path(tbl, ...)
 end
+PathLib.pathTo = pathTo
 
 local function setPath(tbl, value, ...)
     local path = concat({...}, ".")
     set(tbl, path, value)
     addToCache(path, value)
 end
+PathLib.setPath = setPath
 
 local function deletePath(tbl, ...)
     local path = concat({...}, ".")
@@ -467,6 +477,7 @@ local function deletePath(tbl, ...)
     end
     return result
 end
+PathLib.deletePath = deletePath
 
 local function validatePath(path)
     assertType(path, "string", "path")
@@ -481,6 +492,7 @@ local function validatePath(path)
     end
     -- Add more validation as needed
 end
+PathLib.validatePath = validatePath
 
 local function map(tbl, path, func)
     local values = get(tbl, path)
