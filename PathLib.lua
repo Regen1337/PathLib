@@ -1,18 +1,31 @@
 -- Lua Pathing Library
--- Version: 1.0
+-- Version: 1.1
 -- Description: This library provides functionality for table traversal and manipulation.
 
 local PathLib = {
     cacheSize = 5000,
     bDebugMode = true,
-    bWrapWithErrorHandling = true,
+    bWrapWithErrorHandling = false,
     cache = {},
     deepCopyCache = {},
     circularCache = {}
 }
 
+PathLib.NodeType = {
+    KEY = 1,
+    INDEX = 2,
+    WILDCARD = 3
+}
+local NODE_T_KEY = PathLib.NodeType.KEY
+local NODE_T_INDEX = PathLib.NodeType.INDEX
+local NODE_T_WILDCARD = PathLib.NodeType.WILDCARD
+
 -- Utility
 local unpack = (table and table.unpack) or unpack or error("unpack is not defined, please define it")
+local tonumber, tostring, pairs, ipairs, type, getmetatable, setmetatable, concat = tonumber, tostring, pairs, ipairs, type, getmetatable, setmetatable, table.concat
+local deepCopyCache = PathLib.deepCopyCache
+local circularCache = PathLib.circularCache
+local cache, cacheSize = PathLib.cache, PathLib.cacheSize
 
 local function isTable(v) return type(v) == "table" end
 local function isString(v) return type(v) == "string" end
@@ -20,14 +33,14 @@ local function isNil(v) return v == nil end
 
 function PathLib.debugPrint(...) if PathLib.bDebugMode then _G.print(...) end end
 
-function PathLib.assertType(value, expectedType, paramName)
+local function assertType(value, expectedType, paramName)
     if type(value) ~= expectedType then
         error(string.format("Expected %s to be %s, got %s", paramName, expectedType, type(value)), 3)
     end
 end
-local assertType = PathLib.assertType
+PathLib.assertType = assertType
 
-function PathLib.wrapWithErrorHandling(func)
+local function wrapWithErrorHandling(func)
     return function(...)
         local success, result = pcall(func, ...)
         if not success then
@@ -40,16 +53,16 @@ function PathLib.wrapWithErrorHandling(func)
         return result
     end
 end
-local wrapWithErrorHandling = PathLib.wrapWithErrorHandling
+PathLib.wrapWithErrorHandling = wrapWithErrorHandling
 
-function PathLib.assertEquals(actual, expected, message)
+local function assertEquals(actual, expected, message)
     if actual ~= expected then
         error(string.format("%s: expected %s, got %s", message, tostring(expected), tostring(actual)), 2)
     end
 end
-local assertEquals = PathLib.assertEquals
+PathLib.assertEquals = assertEquals
 
-function PathLib.assertTableEquals(actual, expected, message)
+local function assertTableEquals(actual, expected, message)
     if actual == nil and expected == nil then
         return
     end
@@ -67,10 +80,46 @@ function PathLib.assertTableEquals(actual, expected, message)
         end
     end
 end
-local assertTableEquals = PathLib.assertTableEquals
+PathLib.assertTableEquals = assertTableEquals
 
-local deepCopyCache = PathLib.deepCopyCache
-function PathLib.deepCopy(t)
+local function setRecursive(current, pathIndex, path, value)
+    if pathIndex > #path then
+        return
+    end
+
+    local node = path[pathIndex]
+    if node.type == NODE_T_WILDCARD then
+        for k, v in pairs(current) do
+            if isTable(v) then
+                setRecursive(v, pathIndex + 1, path, value)
+            end
+        end
+    else
+        if pathIndex == #path then
+            if node.type == NODE_T_INDEX then
+                current[tonumber(node.value)] = value
+            else
+                current[node.value] = value
+            end
+        else
+            if node.type == NODE_T_INDEX then
+                local index = tonumber(node.value)
+                if isNil(current[index]) then
+                    current[index] = {}
+                end
+                setRecursive(current[index], pathIndex + 1, path, value)
+            else
+                if isNil(current[node.value]) then
+                    current[node.value] = {}
+                end
+                setRecursive(current[node.value], pathIndex + 1, path, value)
+            end
+        end
+    end
+end
+PathLib.setRecursive = setRecursive
+
+local function deepCopy(t)
     if type(t) ~= "table" then return t end
     if deepCopyCache[t] then return deepCopyCache[t] end
 
@@ -79,21 +128,20 @@ function PathLib.deepCopy(t)
 
     for k, v in pairs(t) do
         if type(v) == "table" then
-            copy[PathLib.deepCopy(k)] = PathLib.deepCopy(v)
+            copy[deepCopy(k)] = deepCopy(v)
         elseif type(v) == "function" or type(v) == "userdata" or type(v) == "thread" then
             -- For functions, userdata, and threads, we maintain the reference(?)
-            copy[PathLib.deepCopy(k)] = v
+            copy[deepCopy(k)] = v
         else
-            copy[PathLib.deepCopy(k)] = v
+            copy[deepCopy(k)] = v
         end
     end
 
     return setmetatable(copy, getmetatable(t))
 end
-local deepCopy = PathLib.deepCopy
+PathLib.deepCopy = deepCopy
 
-local circularCache = PathLib.circularCache
-function PathLib.checkCircular(t)
+local function checkCircular(t)
     if type(t) ~= "table" then
         return false
     end
@@ -105,7 +153,7 @@ function PathLib.checkCircular(t)
     circularCache[t] = true
     
     for _, v in pairs(t) do
-        if PathLib.checkCircular(v) then
+        if checkCircular(v) then
             return true
         end
     end
@@ -113,29 +161,23 @@ function PathLib.checkCircular(t)
     circularCache[t] = nil
     return false
 end
-local checkCircular = PathLib.checkCircular
+PathLib.checkCircular = checkCircular
 
-function PathLib.clearCircularCache()
+local function clearCircularCache()
     for k in pairs(circularCache) do
         circularCache[k] = nil
     end
 end
-local clearCircularCache = PathLib.clearCircularCache
+PathLib.clearCircularCache = clearCircularCache
 
 -- AST implementation
 
-PathLib.NodeType = {
-    KEY = 1,
-    INDEX = 2,
-    WILDCARD = 3
-}
-
-function PathLib.createNode(type, value)
+local function createNode(type, value)
     return {type = type, value = value}
 end
-local createNode = PathLib.createNode
+PathLib.createNode = createNode
 
-function PathLib.parsePath(path)
+local function parsePath(path)
     local ast = {}
     local current = ""
     local inBracket = false
@@ -145,18 +187,18 @@ function PathLib.parsePath(path)
         if char == "." and not inBracket then
             if current ~= "" then
                 if current:find("*") then
-                    table.insert(ast, createNode(PathLib.NodeType.WILDCARD, current))
+                    table.insert(ast, createNode(NODE_T_WILDCARD, current))
                 else
-                    table.insert(ast, createNode(PathLib.NodeType.KEY, current))
+                    table.insert(ast, createNode(NODE_T_KEY, current))
                 end
                 current = ""
             end
         elseif char == "[" and not inBracket then
             if current ~= "" then
                 if current:find("*") then
-                    table.insert(ast, createNode(PathLib.NodeType.WILDCARD, current))
+                    table.insert(ast, createNode(NODE_T_WILDCARD, current))
                 else
-                    table.insert(ast, createNode(PathLib.NodeType.KEY, current))
+                    table.insert(ast, createNode(NODE_T_KEY, current))
                 end
                 current = ""
             end
@@ -164,9 +206,9 @@ function PathLib.parsePath(path)
         elseif char == "]" and inBracket then
             if current ~= "" then
                 if current:find("*") then
-                    table.insert(ast, createNode(PathLib.NodeType.WILDCARD, current))
+                    table.insert(ast, createNode(NODE_T_WILDCARD, current))
                 else
-                    table.insert(ast, createNode(PathLib.NodeType.INDEX, current))
+                    table.insert(ast, createNode(NODE_T_INDEX, current))
                 end
                 current = ""
             end
@@ -178,17 +220,17 @@ function PathLib.parsePath(path)
 
     if current ~= "" then
         if current:find("*") then
-            table.insert(ast, createNode(PathLib.NodeType.WILDCARD, current))
+            table.insert(ast, createNode(NODE_T_WILDCARD, current))
         else
-            table.insert(ast, createNode(PathLib.NodeType.KEY, current))
+            table.insert(ast, createNode(NODE_T_KEY, current))
         end
     end
 
     return ast
 end
-local parsePath = PathLib.parsePath
+PathLib.parsePath = parsePath
 
-function PathLib.handleWildcard(tbl, pattern, restPath)
+local function handleWildcard(tbl, pattern, restPath)
     local results = {}
     for k, v in pairs(tbl) do
         if k:match(pattern) then
@@ -210,27 +252,26 @@ function PathLib.handleWildcard(tbl, pattern, restPath)
     end
     return results
 end
-local handleWildcard = PathLib.handleWildcard
+PathLib.handleWildcard = handleWildcard
 
 -- Cache implementation
 
-local cache, cacheSize = PathLib.cache, PathLib.cacheSize
-function PathLib.addToCache(path, value)
+local function addToCache(path, value)
     if #cache >= cacheSize then
         table.remove(cache, 1)
     end
     cache[path] = value
 end
-local addToCache = PathLib.addToCache
+PathLib.addToCache = addToCache
 
-function PathLib.getFromCache(path)
+local function getFromCache(path)
     return cache[path]
 end
-local getFromCache = PathLib.getFromCache
+PathLib.getFromCache = getFromCache
 
 -- Core functionality
 
-function PathLib.get(tbl, path)
+local function get(tbl, path)
     if isString(path) then
         path = parsePath(path)
     end
@@ -239,11 +280,11 @@ function PathLib.get(tbl, path)
     for i, node in ipairs(path) do
         if isNil(current) then return nil end
 
-        if node.type == PathLib.NodeType.WILDCARD then
+        if node.type == NODE_T_WILDCARD then
             local pattern = node.value:gsub("%*", ".*")
             return handleWildcard(current, "^" .. pattern .. "$", {unpack(path, i+1)})
         elseif isTable(current) then
-            if node.type == PathLib.NodeType.INDEX then
+            if node.type == NODE_T_INDEX then
                 current = current[tonumber(node.value)]
             else
                 current = current[node.value]
@@ -255,52 +296,18 @@ function PathLib.get(tbl, path)
 
     return current
 end
+PathLib.get = get
 
-function PathLib.set(tbl, path, value)
+local function set(tbl, path, value)
     if isString(path) then
         path = parsePath(path)
     end
 
-    local function setRecursive(current, pathIndex)
-        if pathIndex > #path then
-            return
-        end
-
-        local node = path[pathIndex]
-        if node.type == PathLib.NodeType.WILDCARD then
-            for k, v in pairs(current) do
-                if isTable(v) then
-                    setRecursive(v, pathIndex + 1)
-                end
-            end
-        else
-            if pathIndex == #path then
-                if node.type == PathLib.NodeType.INDEX then
-                    current[tonumber(node.value)] = value
-                else
-                    current[node.value] = value
-                end
-            else
-                if node.type == PathLib.NodeType.INDEX then
-                    local index = tonumber(node.value)
-                    if isNil(current[index]) then
-                        current[index] = {}
-                    end
-                    setRecursive(current[index], pathIndex + 1)
-                else
-                    if isNil(current[node.value]) then
-                        current[node.value] = {}
-                    end
-                    setRecursive(current[node.value], pathIndex + 1)
-                end
-            end
-        end
-    end
-
-    setRecursive(tbl, 1)
+    setRecursive(tbl, 1, path, value)
 end
+PathLib.set = set
 
-function PathLib.delete(tbl, path)
+local function delete(tbl, path)
     if isString(path) then
         path = parsePath(path)
     end
@@ -308,14 +315,14 @@ function PathLib.delete(tbl, path)
     local current = tbl
     for i, node in ipairs(path) do
         if i == #path then
-            if node.type == PathLib.NodeType.INDEX then
+            if node.type == NODE_T_INDEX then
                 table.remove(current, tonumber(node.value))
             else
                 current[node.value] = nil
             end
             return true
         else
-            if node.type == PathLib.NodeType.INDEX then
+            if node.type == NODE_T_INDEX then
                 current = current[tonumber(node.value)]
             else
                 current = current[node.value]
@@ -326,59 +333,62 @@ function PathLib.delete(tbl, path)
         end
     end
 end
+PathLib.delete = delete
 
 -- Advanced features
 
-function PathLib.find(tbl, predicate)
+local function findTraverse(t, currentPath, predicate, results)
+    for k, v in pairs(t) do
+        local newPath
+        if type(k) == "number" then
+            newPath = currentPath .. "[" .. tostring(k) .. "]"
+        else
+            newPath = currentPath .. (currentPath ~= "" and "." or "") .. tostring(k)
+        end
+        
+        if predicate(v, newPath) then
+            table.insert(results, newPath)
+        end
+        if isTable(v) then
+            findTraverse(v, newPath, predicate, results)
+        end
+    end
+end
+
+local function find(tbl, predicate)
     local results = {}
 
-    local function traverse(t, currentPath)
-        for k, v in pairs(t) do
-            local newPath
-            if type(k) == "number" then
-                newPath = currentPath .. "[" .. tostring(k) .. "]"
-            else
-                newPath = currentPath .. (currentPath ~= "" and "." or "") .. tostring(k)
-            end
-            
-            if predicate(v, newPath) then
-                table.insert(results, newPath)
-            end
-            if isTable(v) then
-                traverse(v, newPath)
-            end
-        end
-    end
-
-    traverse(tbl, "")
+    findTraverse(tbl, "", predicate, results)
     return results
 end
+PathLib.find = find
 
-function PathLib.flatten(tbl)
-    local result = {}
-
-    local function traverse(t, prefix)
-        for k, v in pairs(t) do
-            local newKey
-            if type(k) == "number" then
-                newKey = prefix .. "[" .. tostring(k) .. "]"
-            else
-                newKey = prefix .. (prefix ~= "" and "." or "") .. tostring(k)
-            end
-            
-            if isTable(v) then
-                traverse(v, newKey)
-            else
-                result[newKey] = v
-            end
+local function flattenTraverse(t, prefix, result)
+    for k, v in pairs(t) do
+        local newKey
+        if type(k) == "number" then
+            newKey = prefix .. "[" .. tostring(k) .. "]"
+        else
+            newKey = prefix .. (prefix ~= "" and "." or "") .. tostring(k)
+        end
+        
+        if isTable(v) then
+            flattenTraverse(v, newKey, result)
+        else
+            result[newKey] = v
         end
     end
-
-    traverse(tbl, "")
-    return result
 end
 
-function PathLib.unflatten(tbl)
+local function flatten(tbl)
+    local result = {}
+
+    flattenTraverse(tbl, "", result)
+    return result
+end
+PathLib.flatten = flatten
+
+local function unflatten(tbl)
     local result = {}
 
     for k, v in pairs(tbl) do
@@ -396,18 +406,20 @@ function PathLib.unflatten(tbl)
 
     return result
 end
+PathLib.unflatten = unflatten
 
 -- Metatable and circular reference handling
 
-function PathLib.isCircular(tbl)
+local function isCircular(tbl)
     assertType(tbl, "table", "tbl")
     seenTables = {}
     return checkCircular(tbl)
 end
+PathLib.isCircular = isCircular
 
 -- Analysis functions
 
-function PathLib.analyzePath(tbl, path)
+local function analyzePath(tbl, path)
     local result = {
         exists = false,
         value = nil,
@@ -440,43 +452,48 @@ function PathLib.analyzePath(tbl, path)
 
     return result
 end
+PathLib.analyzePath = analyzePath
 
 -- Public API
 
-function PathLib.path(tbl, ...)
+local function path(tbl, ...)
     local args = {...}
     if #args == 0 then
         error("PathLib error: No path provided", 2)
     end
-    local path = table.concat(args, ".")
+    local path = concat(args, ".")
     local cached = getFromCache(path)
     if cached then return cached end
 
-    local result = PathLib.get(tbl, path)
+    local result = get(tbl, path)
     addToCache(path, result)
     return result
 end
+PathLib.path = path
 
-function PathLib.pathTo(tbl, ...)
-    return PathLib.path(tbl, ...)
+local function pathTo(tbl, ...)
+    return path(tbl, ...)
 end
+PathLib.pathTo = pathTo
 
-function PathLib.setPath(tbl, value, ...)
-    local path = table.concat({...}, ".")
-    PathLib.set(tbl, path, value)
+local function setPath(tbl, value, ...)
+    local path = concat({...}, ".")
+    set(tbl, path, value)
     addToCache(path, value)
 end
+PathLib.setPath = setPath
 
-function PathLib.deletePath(tbl, ...)
-    local path = table.concat({...}, ".")
-    local result = PathLib.delete(tbl, path)
+local function deletePath(tbl, ...)
+    local path = concat({...}, ".")
+    local result = delete(tbl, path)
     if result then
         addToCache(path, nil)
     end
     return result
 end
+PathLib.deletePath = deletePath
 
-function PathLib.validatePath(path)
+local function validatePath(path)
     assertType(path, "string", "path")
     if path:match("%.%.") then
         error("Invalid path: contains empty segments", 2)
@@ -489,6 +506,7 @@ function PathLib.validatePath(path)
     end
     -- Add more validation as needed
 end
+PathLib.validatePath = validatePath
 
 if PathLib.bWrapWithErrorHandling then
     PathLib.get = wrapWithErrorHandling(PathLib.get)
