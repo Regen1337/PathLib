@@ -65,6 +65,33 @@ local results = PathLib.get(table, "*.users.*.name")
 
 -- Analyze a path
 local analysis = PathLib.analyzePath(table, "path.to.analyze")
+
+-- Find values using a predicate
+local results = PathLib.find(table, function(v) return type(v) == "number" and v > 10 end)
+
+-- Flatten a nested table
+local flat = PathLib.flatten(table)
+
+-- Unflatten a table
+local nested = PathLib.unflatten(flat)
+
+-- Check for circular references
+local isCircular = PathLib.isCircular(table)
+
+-- Use wildcards
+local results = PathLib.get(table, "*.users.*.name")
+
+-- Analyze a path
+local analysis = PathLib.analyzePath(table, "path.to.analyze")
+
+-- Map operation
+PathLib.map(table, "path.to.array", function(v) return v * 2 end)
+
+-- Filter operation
+local filtered = PathLib.filter(table, "path.to.array", function(v) return v % 2 == 0 end)
+
+-- Reduce operation
+local sum = PathLib.reduce(table, "path.to.array", function(acc, v) return acc + v end, 0)
 ```
 
 ## Examples
