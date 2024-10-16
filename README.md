@@ -19,6 +19,7 @@ The Lua Pathing Library is a flexible tool for traversing and manipulating neste
 - Wildcard support for flexible querying
 - Path analysis for detailed information about specific paths
 - Caching mechanism for improved performance
+- Map, filter, and reduce operations on nested data structures
 
 ## Installation
 
