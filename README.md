@@ -49,21 +49,6 @@ PathLib.delete(table, "path.to.delete")
 ### Advanced Features
 
 ```lua
--- Find values using a predicate
-local results = PathLib.find(table, function(v) return type(v) == "number" and v > 10 end)
-
--- Flatten a nested table
-local flat = PathLib.flatten(table)
-
--- Unflatten a table
-local nested = PathLib.unflatten(flat)
-
--- Check for circular references
-local isCircular = PathLib.isCircular(table)
-
--- Use wildcards
-local results = PathLib.get(table, "*.users.*.name")
-
 -- Analyze a path
 local analysis = PathLib.analyzePath(table, "path.to.analyze")
 
