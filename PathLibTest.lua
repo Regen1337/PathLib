@@ -262,6 +262,87 @@ local function testCache()
     assertEquals(result3, 3, "Path access after cache clear failed")
 end
 
+local function testMap()
+    local testTable = {
+        a = {1, 2, 3},
+        b = {
+            c = {4, 5, 6},
+            d = 7
+        }
+    }
+
+    -- Test map on array
+    PathLib.map(testTable, "a", function(v) return v * 2 end)
+    assertTableEquals(testTable.a, {2, 4, 6}, "Map on array failed")
+
+    -- Test map on nested array
+    PathLib.map(testTable, "b.c", function(v) return v + 1 end)
+    assertTableEquals(testTable.b.c, {5, 6, 7}, "Map on nested array failed")
+
+    -- Test map on single value
+    PathLib.map(testTable, "b.d", function(v) return v * 2 end)
+    assertEquals(testTable.b.d, 14, "Map on single value failed")
+
+    debugPrint("Map tests passed")
+end
+
+local function testFilter()
+    local testTable = {
+        a = {1, 2, 3, 4, 5},
+        b = {
+            c = {2, 4, 6, 8, 10},
+            d = 7
+        }
+    }
+
+    -- Test filter on array
+    local resultA = PathLib.filter(testTable, "a", function(v) return v % 2 == 0 end)
+    assertTableEquals(resultA, {2, 4}, "Filter on array failed")
+    assertTableEquals(testTable.a, {2, 4}, "Filter should modify original table when path is provided")
+
+    -- Test filter on nested array
+    local resultB = PathLib.filter(testTable, "b.c", function(v) return v > 5 end)
+    assertTableEquals(resultB, {6, 8, 10}, "Filter on nested array failed")
+    assertTableEquals(testTable.b.c, {6, 8, 10}, "Filter should modify original table when path is provided")
+
+    -- Test filter on single value (should not change original, but return filtered result)
+    local resultD = PathLib.filter(testTable, "b.d", function(v) return v > 10 end)
+    assertTableEquals(resultD, {}, "Filter on single value should return empty table when condition is not met")
+    assertEquals(testTable.b.d, 7, "Filter on single value should not change the original value")
+
+    -- Test filter without path (should not modify original table)
+    local testArray = {1, 2, 3, 4, 5}
+    local resultArray = PathLib.filter(testArray, function(v) return v % 2 == 0 end)
+    assertTableEquals(resultArray, {2, 4}, "Filter without path failed")
+    assertTableEquals(testArray, {1, 2, 3, 4, 5}, "Filter without path should not modify original table")
+
+    debugPrint("Filter tests passed")
+end
+
+local function testReduce()
+    local testTable = {
+        a = {1, 2, 3, 4, 5},
+        b = {
+            c = {2, 4, 6, 8, 10},
+            d = 7
+        }
+    }
+
+    -- Test reduce on array
+    local sum = PathLib.reduce(testTable, "a", function(acc, v) return acc + v end, 0)
+    assertEquals(sum, 15, "Reduce sum on array failed")
+
+    -- Test reduce on nested array
+    local product = PathLib.reduce(testTable, "b.c", function(acc, v) return acc * v end, 1)
+    assertEquals(product, 3840, "Reduce product on nested array failed")
+
+    -- Test reduce on single value
+    local double = PathLib.reduce(testTable, "b.d", function(acc, v) return v * 2 end, 0)
+    assertEquals(double, 14, "Reduce on single value failed")
+
+    debugPrint("Reduce tests passed")
+end
+
 local function runAllTests()
     local tests = {
         testGet,
@@ -273,7 +354,10 @@ local function runAllTests()
         testWildcard,
         testAnalyzePath,
         testErrorHandling,
-        testCache
+        testCache,
+        testMap,
+        testFilter,
+        testReduce
     }
 
     local passed = 0

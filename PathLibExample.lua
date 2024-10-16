@@ -117,12 +117,38 @@ local function transferGold(fromPlayer, toPlayer, amount)
     end
 end
 
+local function upgradeItems()
+    PathLib.map(gameState, "players.*.inventory.items.*", function(item)
+        if item.type == "weapon" or item.type == "armor" then
+            item.level = (item.level or 0) + 1
+
+            item.name = item.name:gsub("%+%d+", "") .. " +" .. item.level
+        end
+        return item
+    end)
+end
+
+local function getHighValueItems(minValue)
+    return PathLib.filter(gameState, "players.*.inventory.items.*", function(item)
+        local baseValue = item.rarity == "common" and 50 or item.rarity == "rare" and 100 or 200
+        local totalValue = baseValue * (item.quantity or 1)
+        print("Checking item: " .. (item.name or "Unknown") .. ", Value: " .. totalValue)
+        return totalValue >= minValue
+    end)
+end
+
+local function calculateTotalGold()
+    return PathLib.reduce(gameState, "players.*.stats.gold", function(acc, gold)
+        return acc + gold
+    end, 0)
+end
+
 print("Initial rare items for all players:")
 listItemsByRarity("rare")
 
 print("\nEquipping items:")
 equipItem("player1", "sword1")
-equipItem("player2", "staff1")
+equipItem("player2", "sword1")
 
 print("\nCalculating total value of swords:")
 print("Total value of swords: " .. calculateTotalValueBySubtype("sword") .. " gold")
@@ -165,4 +191,63 @@ local flatState = PathLib.flatten(PathLib.path(gameState, "players.player1"))
 print("\nFlattened state for player1:")
 for k, v in pairs(flatState) do
     print(k .. ": " .. tostring(v))
+end
+
+print("\nUpgrading all weapons and armor:")
+upgradeItems()
+local allItems = PathLib.get(gameState, "players.*.inventory.items.*")
+for _, item in ipairs(allItems) do
+    if item.type == "weapon" or item.type == "armor" then
+        print(item.name)
+    end
+end
+
+print("\nHigh value items (worth 200 gold or more):")
+local highValueItems = getHighValueItems(200)
+print("Number of high value items found: " .. #highValueItems)
+for _, item in ipairs(highValueItems) do
+    local baseValue = item.rarity == "common" and 50 or item.rarity == "rare" and 100 or 200
+    local totalValue = baseValue * (item.quantity or 1)
+    print(item.name .. " x" .. (item.quantity or 1) .. " (Total value: " .. totalValue .. " gold)")
+end
+
+print("\nTotal gold across all players:")
+local totalGold = calculateTotalGold()
+print("Total gold: " .. totalGold .. " gold")
+
+-- Example of chaining operations
+print("\nUpgrading and filtering rare weapons:")
+PathLib.map(gameState, "players.*.inventory.items.*", function(item)
+    if item.type == "weapon" and item.rarity == "rare" then
+        item.level = (item.level or 0) + 2
+        item.name = item.name:gsub("%+%d+", "") .. "+" .. item.level
+
+        print("Upgraded " .. item.name)
+    end
+    return item
+end)
+
+local rareWeapons = PathLib.filter(gameState, "players.*.inventory.items.*", function(item)
+    return item.type == "weapon" and item.rarity == "rare"
+end)
+
+for _, weapon in ipairs(rareWeapons) do
+    print(weapon.name .. " (Level " .. weapon.level .. ")")
+end
+
+-- Example of using reduce for more complex calculations
+print("\nCalculating average item level for each player:")
+local avgLevels = PathLib.reduce(gameState, "players", function(acc, player, playerName)
+    local items = PathLib.get(gameState, "players." .. playerName .. ".inventory.items")
+    local totalLevel, itemCount = 0, 0
+    for _, item in pairs(items) do
+        totalLevel = totalLevel + (item.level or 0)
+        itemCount = itemCount + 1
+    end
+    acc[playerName] = itemCount > 0 and (totalLevel / itemCount) or 0
+    return acc
+end, {})
+
+for playerName, avgLevel in pairs(avgLevels) do
+    print(playerName .. ": Average item level = " .. string.format("%.2f", avgLevel))
 end
